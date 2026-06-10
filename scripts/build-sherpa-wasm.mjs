@@ -50,13 +50,7 @@ if (!(await exists(resolve(emsdk, ".git")))) {
 }
 
 await runWindowsBatch(emsdkCommand, ["install", emscriptenVersion], { cwd: emsdk });
-const activatedTools = [emscriptenVersion];
-if (process.platform === "win32") {
-  const ninjaTool = "ninja-git-release-64bit";
-  await runWindowsBatch(emsdkCommand, ["install", ninjaTool], { cwd: emsdk });
-  activatedTools.push(ninjaTool);
-}
-await runWindowsBatch(emsdkCommand, ["activate", ...activatedTools], { cwd: emsdk });
+await runWindowsBatch(emsdkCommand, ["activate", emscriptenVersion], { cwd: emsdk });
 
 const emsdkConfig = await readFile(resolve(emsdk, ".emscripten"), "utf8");
 function configuredPath(name) {
@@ -71,9 +65,21 @@ function configuredPath(name) {
 
 const python = configuredPath("PYTHON");
 const node = configuredPath("NODE_JS");
-const configuredNinja = process.platform === "win32"
-  ? configuredPath("NINJA")
-  : null;
+let configuredNinja = null;
+if (process.platform === "win32") {
+  try {
+    const { stdout } = await run("where.exe", ["ninja.exe"], {
+      cwd: root,
+      capture: true,
+    });
+    configuredNinja = stdout.split(/\r?\n/, 1)[0]?.trim() || null;
+  } catch {
+    throw new Error(
+      "Ninja is required on Windows. Install it with: " +
+        "winget install --id Ninja-build.Ninja -e",
+    );
+  }
+}
 
 const environment = {
   EMSDK: emsdk,
@@ -83,7 +89,7 @@ const environment = {
   PATH: [
     dirname(python),
     dirname(node),
-    configuredNinja,
+    configuredNinja ? dirname(configuredNinja) : null,
     emscripten,
     process.env.PATH ?? "",
   ].filter(Boolean).join(delimiter),
