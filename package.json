@@ -1,0 +1,16 @@
+{
+  "name": "kws-online-service",
+  "private": true,
+  "engines": { "node": ">=22 <23" },
+  "scripts": {
+    "dev": "npm --prefix web run dev",
+    "test": "npm --prefix web test",
+    "build": "npm --prefix web run build",
+    "test:e2e": "npm --prefix web run test:e2e",
+    "model:package": "npm --prefix web run model:package --",
+    "sherpa:fetch": "node scripts/fetch-sherpa-onnx.mjs",
+    "sherpa:build": "node scripts/build-sherpa-wasm.mjs",
+    "verify:kws": "node scripts/verify-kws-consistency.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
+  }
+}

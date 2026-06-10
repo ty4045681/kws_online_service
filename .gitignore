@@ -1,0 +1,15 @@
+.DS_Store
+.idea/workspace.xml
+.superpowers/
+.toolchains/
+node_modules/
+web/node_modules/
+web/dist/
+web/playwright-report/
+web/test-results/
+web/public/models/kws/
+web/public/wasm/kws/
+model-source/kws/*
+!model-source/kws/.gitkeep
+third_party/sherpa-onnx/
+third_party/sherpa-onnx-build/
