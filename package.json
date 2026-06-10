@@ -4,6 +4,7 @@
   "engines": { "node": ">=22 <23" },
   "scripts": {
     "dev": "npm --prefix web run dev",
+    "dev:mock": "npm --prefix web run dev:mock",
     "test": "npm --prefix web test",
     "build": "npm --prefix web run build",
     "test:e2e": "npm --prefix web run test:e2e",
