@@ -382,10 +382,6 @@ export class KwsSessionController {
     let app = reduce(this.snapshot.app, message);
     if (message.type === "engine-ready") {
       app = reduce(app, { type: "phase-changed", phase: "ready-for-microphone" });
-      this.kwsWorker?.postMessage({
-        type: "rebuild-keywords",
-        keywordsText: settingsToKeywordsText(this.snapshot.settings),
-      } satisfies KwsWorkerInboundMessage);
     } else if (message.type === "partial") {
       this.waveHistory.markMatchingRange(
         message.startSample,

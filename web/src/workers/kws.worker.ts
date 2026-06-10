@@ -6,6 +6,7 @@ import type {
 } from "../app/protocol";
 import type { KwsEngine } from "../kws/KwsEngine";
 import { MockKwsEngine } from "../kws/MockKwsEngine";
+import { SherpaKwsEngine } from "../kws/SherpaKwsEngine";
 
 interface WorkerScope {
   postMessage(message: WorkerMessage): void;
@@ -25,18 +26,11 @@ function recoverableError(code: string, message: string): ErrorWorkerMessage {
   return { type: "error", recoverable: true, code, message };
 }
 
-function createSherpaEngine(): ErrorWorkerMessage {
-  return recoverableError(
-    "NOT_IMPLEMENTED",
-    "The production Sherpa KWS engine is not implemented yet",
-  );
-}
-
 function createEngine(selection: KwsEngineSelection): KwsEngine | ErrorWorkerMessage {
   if (selection === "mock") {
     return new MockKwsEngine();
   }
-  return createSherpaEngine();
+  return new SherpaKwsEngine();
 }
 
 function errorMessage(error: unknown): string {

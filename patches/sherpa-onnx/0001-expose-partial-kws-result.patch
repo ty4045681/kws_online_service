@@ -1,0 +1,473 @@
+diff --git a/sherpa-onnx/c-api/c-api.cc b/sherpa-onnx/c-api/c-api.cc
+index 4648bbc..1ae6a65 100644
+--- a/sherpa-onnx/c-api/c-api.cc
++++ b/sherpa-onnx/c-api/c-api.cc
+@@ -1174,6 +1174,71 @@ void SherpaOnnxDestroyKeywordResult(const SherpaOnnxKeywordResult *r) {
+   }
+ }
+ 
++const SherpaOnnxPartialKeywordResult *SherpaOnnxGetPartialKeywordResult(
++    const SherpaOnnxKeywordSpotter *spotter,
++    const SherpaOnnxOnlineStream *stream) {
++  if (!spotter || !stream) return nullptr;
++  auto result = spotter->impl->GetPartialResult(stream->impl.get());
++  auto output = new SherpaOnnxPartialKeywordResult;
++  memset(output, 0, sizeof(SherpaOnnxPartialKeywordResult));
++
++  char *keyword = new char[result.keyword.size() + 1];
++  std::copy(result.keyword.begin(), result.keyword.end(), keyword);
++  keyword[result.keyword.size()] = 0;
++  output->keyword = keyword;
++  output->matched_token_count = result.matched_token_count;
++  output->keyword_token_count = result.keyword_token_count;
++  output->revision = result.revision;
++  output->is_active = result.is_active ? 1 : 0;
++
++  if (!result.tokens.empty()) {
++    size_t total_length = 0;
++    for (const auto &token : result.tokens) total_length += token.size() + 1;
++    char *token_storage = new char[total_length]{};
++    char **token_pointers = new char *[result.tokens.size()];
++    size_t offset = 0;
++    for (size_t i = 0; i < result.tokens.size(); ++i) {
++      token_pointers[i] = token_storage + offset;
++      memcpy(token_storage + offset, result.tokens[i].data(),
++             result.tokens[i].size());
++      offset += result.tokens[i].size() + 1;
++    }
++    output->tokens_arr = token_pointers;
++  }
++
++  if (!result.frame_indexes.empty()) {
++    auto frame_indexes = new int32_t[result.frame_indexes.size()];
++    std::copy(result.frame_indexes.begin(), result.frame_indexes.end(),
++              frame_indexes);
++    output->frame_indexes = frame_indexes;
++  }
++  return output;
++}
++
++void SherpaOnnxDestroyPartialKeywordResult(
++    const SherpaOnnxPartialKeywordResult *result) {
++  if (!result) return;
++  if (result->tokens_arr) {
++    delete[] result->tokens_arr[0];
++  }
++  delete[] result->tokens_arr;
++  delete[] result->frame_indexes;
++  delete[] result->keyword;
++  delete result;
++}
++
++const char *SherpaOnnxGetPartialKeywordResultAsJson(
++    const SherpaOnnxKeywordSpotter *spotter,
++    const SherpaOnnxOnlineStream *stream) {
++  if (!spotter || !stream) return nullptr;
++  std::string json =
++      spotter->impl->GetPartialResult(stream->impl.get()).AsJsonString();
++  char *output = new char[json.size() + 1];
++  std::copy(json.begin(), json.end(), output);
++  output[json.size()] = 0;
++  return output;
++}
++
+ const char *SherpaOnnxGetKeywordResultAsJson(
+     const SherpaOnnxKeywordSpotter *spotter,
+     const SherpaOnnxOnlineStream *stream) {
+diff --git a/sherpa-onnx/c-api/c-api.h b/sherpa-onnx/c-api/c-api.h
+index b0155da..1fa7cdf 100644
+--- a/sherpa-onnx/c-api/c-api.h
++++ b/sherpa-onnx/c-api/c-api.h
+@@ -1640,6 +1640,16 @@ typedef struct SherpaOnnxKeywordResult {
+   const char *json;
+ } SherpaOnnxKeywordResult;
+ 
++typedef struct SherpaOnnxPartialKeywordResult {
++  const char *keyword;
++  const char *const *tokens_arr;
++  const int32_t *frame_indexes;
++  int32_t matched_token_count;
++  int32_t keyword_token_count;
++  uint64_t revision;
++  int32_t is_active;
++} SherpaOnnxPartialKeywordResult;
++
+ /**
+  * @brief Configuration for keyword spotting.
+  *
+@@ -1846,6 +1856,18 @@ SHERPA_ONNX_API const SherpaOnnxKeywordResult *SherpaOnnxGetKeywordResult(
+ SHERPA_ONNX_API void SherpaOnnxDestroyKeywordResult(
+     const SherpaOnnxKeywordResult *r);
+ 
++SHERPA_ONNX_API const SherpaOnnxPartialKeywordResult *
++SherpaOnnxGetPartialKeywordResult(
++    const SherpaOnnxKeywordSpotter *spotter,
++    const SherpaOnnxOnlineStream *stream);
++
++SHERPA_ONNX_API void SherpaOnnxDestroyPartialKeywordResult(
++    const SherpaOnnxPartialKeywordResult *result);
++
++SHERPA_ONNX_API const char *SherpaOnnxGetPartialKeywordResultAsJson(
++    const SherpaOnnxKeywordSpotter *spotter,
++    const SherpaOnnxOnlineStream *stream);
++
+ /**
+  * @brief Get the current keyword spotting result as JSON.
+  *
+diff --git a/sherpa-onnx/c-api/sherpa-onnx-symbols-c.exp b/sherpa-onnx/c-api/sherpa-onnx-symbols-c.exp
+index 9dec82c..702d57f 100644
+--- a/sherpa-onnx/c-api/sherpa-onnx-symbols-c.exp
++++ b/sherpa-onnx/c-api/sherpa-onnx-symbols-c.exp
+@@ -49,6 +49,7 @@ _SherpaOnnxDestroyCircularBuffer
+ _SherpaOnnxDestroyDenoisedAudio
+ _SherpaOnnxDestroyDisplay
+ _SherpaOnnxDestroyKeywordResult
++_SherpaOnnxDestroyPartialKeywordResult
+ _SherpaOnnxDestroyKeywordSpotter
+ _SherpaOnnxDestroyLinearResampler
+ _SherpaOnnxDestroyOfflineDiacritization
+@@ -83,6 +84,8 @@ _SherpaOnnxGetGitDate
+ _SherpaOnnxGetGitSha1
+ _SherpaOnnxGetKeywordResult
+ _SherpaOnnxGetKeywordResultAsJson
++_SherpaOnnxGetPartialKeywordResult
++_SherpaOnnxGetPartialKeywordResultAsJson
+ _SherpaOnnxGetOfflineStreamResult
+ _SherpaOnnxGetOfflineStreamResultAsJson
+ _SherpaOnnxGetOnlineStreamResult
+diff --git a/sherpa-onnx/csrc/keyword-spotter-impl.h b/sherpa-onnx/csrc/keyword-spotter-impl.h
+index dafb0a8..fee4b65 100644
+--- a/sherpa-onnx/csrc/keyword-spotter-impl.h
++++ b/sherpa-onnx/csrc/keyword-spotter-impl.h
+@@ -37,6 +37,10 @@ class KeywordSpotterImpl {
+   virtual void DecodeStreams(OnlineStream **ss, int32_t n) const = 0;
+ 
+   virtual KeywordResult GetResult(OnlineStream *s) const = 0;
++
++  virtual PartialKeywordResult GetPartialResult(OnlineStream *s) const {
++    return {};
++  }
+ };
+ 
+ }  // namespace sherpa_onnx
+diff --git a/sherpa-onnx/csrc/keyword-spotter-transducer-impl.h b/sherpa-onnx/csrc/keyword-spotter-transducer-impl.h
+index 37493b0..1368fde 100644
+--- a/sherpa-onnx/csrc/keyword-spotter-transducer-impl.h
++++ b/sherpa-onnx/csrc/keyword-spotter-transducer-impl.h
+@@ -279,6 +279,22 @@ class KeywordSpotterTransducerImpl : public KeywordSpotterImpl {
+                    s->GetNumFramesSinceStart());
+   }
+ 
++  PartialKeywordResult GetPartialResult(OnlineStream *s) const override {
++    const auto &src = s->GetKeywordResult().partial;
++    PartialKeywordResult result;
++    result.keyword = src.keyword;
++    result.frame_indexes = src.frame_indexes;
++    result.matched_token_count = src.matched_token_count;
++    result.keyword_token_count = src.keyword_token_count;
++    result.revision = src.revision;
++    result.is_active = src.is_active;
++    result.tokens.reserve(src.tokens.size());
++    for (auto token : src.tokens) {
++      result.tokens.push_back(sym_[token]);
++    }
++    return result;
++  }
++
+  private:
+   void InitKeywords(std::istream &is) {
+     if (!EncodeKeywords(is, sym_, &keywords_id_, &keywords_, &boost_scores_,
+diff --git a/sherpa-onnx/csrc/keyword-spotter.cc b/sherpa-onnx/csrc/keyword-spotter.cc
+index ca8ecd1..03ae671 100644
+--- a/sherpa-onnx/csrc/keyword-spotter.cc
++++ b/sherpa-onnx/csrc/keyword-spotter.cc
+@@ -78,6 +78,30 @@ std::string KeywordResult::AsJsonString() const {
+   return os.str();
+ }
+ 
++std::string PartialKeywordResult::AsJsonString() const {
++  std::ostringstream os;
++  os << "{";
++  os << "\"keyword\":\"" << keyword << "\",";
++  os << "\"tokens\":[";
++  std::string separator;
++  for (const auto &token : tokens) {
++    os << separator << "\"" << token << "\"";
++    separator = ",";
++  }
++  os << "],\"frame_indexes\":[";
++  separator.clear();
++  for (auto frame_index : frame_indexes) {
++    os << separator << frame_index;
++    separator = ",";
++  }
++  os << "],\"matched_token_count\":" << matched_token_count;
++  os << ",\"keyword_token_count\":" << keyword_token_count;
++  os << ",\"revision\":" << revision;
++  os << ",\"is_active\":" << (is_active ? "true" : "false");
++  os << "}";
++  return os.str();
++}
++
+ void KeywordSpotterConfig::Register(ParseOptions *po) {
+   feat_config.Register(po);
+   model_config.Register(po);
+@@ -175,6 +199,10 @@ KeywordResult KeywordSpotter::GetResult(OnlineStream *s) const {
+   return impl_->GetResult(s);
+ }
+ 
++PartialKeywordResult KeywordSpotter::GetPartialResult(OnlineStream *s) const {
++  return impl_->GetPartialResult(s);
++}
++
+ #if __ANDROID_API__ >= 9
+ template KeywordSpotter::KeywordSpotter(AAssetManager *mgr,
+                                         const KeywordSpotterConfig &config);
+diff --git a/sherpa-onnx/csrc/keyword-spotter.h b/sherpa-onnx/csrc/keyword-spotter.h
+index e494b3e..7321bdb 100644
+--- a/sherpa-onnx/csrc/keyword-spotter.h
++++ b/sherpa-onnx/csrc/keyword-spotter.h
+@@ -50,6 +50,18 @@ struct KeywordResult {
+   std::string AsJsonString() const;
+ };
+ 
++struct PartialKeywordResult {
++  std::string keyword;
++  std::vector<std::string> tokens;
++  std::vector<int32_t> frame_indexes;
++  int32_t matched_token_count = 0;
++  int32_t keyword_token_count = 0;
++  uint64_t revision = 0;
++  bool is_active = false;
++
++  std::string AsJsonString() const;
++};
++
+ struct KeywordSpotterConfig {
+   FeatureExtractorConfig feat_config;
+   OnlineModelConfig model_config;
+@@ -141,6 +153,8 @@ class KeywordSpotter {
+ 
+   KeywordResult GetResult(OnlineStream *s) const;
+ 
++  PartialKeywordResult GetPartialResult(OnlineStream *s) const;
++
+  private:
+   std::unique_ptr<KeywordSpotterImpl> impl_;
+ };
+diff --git a/sherpa-onnx/csrc/transducer-keyword-decoder.cc b/sherpa-onnx/csrc/transducer-keyword-decoder.cc
+index 62607dd..9f10152 100644
+--- a/sherpa-onnx/csrc/transducer-keyword-decoder.cc
++++ b/sherpa-onnx/csrc/transducer-keyword-decoder.cc
+@@ -15,6 +15,62 @@
+ #include "sherpa-onnx/csrc/onnx-utils.h"
+ 
+ namespace sherpa_onnx {
++namespace {
++
++const ContextState *FindNearestKeywordEnd(const ContextState *state) {
++  if (!state || state->token == -1) return nullptr;
++  if (state->is_end) return state;
++
++  const ContextState *best = nullptr;
++  std::vector<const ContextState *> pending{state};
++  while (!pending.empty()) {
++    const ContextState *current = pending.back();
++    pending.pop_back();
++    if (current->is_end &&
++        (!best || current->level < best->level ||
++         (current->level == best->level && current->phrase < best->phrase))) {
++      best = current;
++    }
++    for (const auto &entry : current->next) {
++      pending.push_back(entry.second.get());
++    }
++  }
++  return best;
++}
++
++void UpdatePartialResult(const Hypothesis &best_hyp,
++                         TransducerKeywordResult *result) {
++  const auto &previous = result->partial;
++  TransducerPartialKeywordResult next;
++  const ContextState *state = best_hyp.context_state;
++  const ContextState *keyword_end = FindNearestKeywordEnd(state);
++
++  if (state && keyword_end && state->level > 0 &&
++      best_hyp.ys.size() >= static_cast<size_t>(state->level) &&
++      best_hyp.timestamps.size() >= static_cast<size_t>(state->level)) {
++    next.keyword = keyword_end->phrase;
++    next.tokens.assign(best_hyp.ys.end() - state->level, best_hyp.ys.end());
++    next.frame_indexes.assign(best_hyp.timestamps.end() - state->level,
++                              best_hyp.timestamps.end());
++    next.matched_token_count = state->level;
++    next.keyword_token_count = keyword_end->level;
++    next.is_active = true;
++  } else if (previous.is_active) {
++    next = previous;
++    next.is_active = false;
++  }
++
++  bool changed = next.keyword != previous.keyword ||
++                 next.tokens != previous.tokens ||
++                 next.frame_indexes != previous.frame_indexes ||
++                 next.matched_token_count != previous.matched_token_count ||
++                 next.keyword_token_count != previous.keyword_token_count ||
++                 next.is_active != previous.is_active;
++  next.revision = previous.revision + (changed ? 1 : 0);
++  result->partial = std::move(next);
++}
++
++}  // namespace
+ 
+ TransducerKeywordResult TransducerKeywordDecoder::GetEmptyResult() const {
+   int32_t context_size = model_->ContextSize();
+@@ -145,6 +201,7 @@ void TransducerKeywordDecoder::Decode(
+       }  // for (auto k : topk)
+ 
+       auto best_hyp = hyps.GetMostProbable(false);
++      UpdatePartialResult(best_hyp, &(*result)[b]);
+ 
+       auto status = ss[b]->GetContextGraph()->IsMatched(best_hyp.context_state);
+       bool matched = std::get<0>(status);
+diff --git a/sherpa-onnx/csrc/transducer-keyword-decoder.h b/sherpa-onnx/csrc/transducer-keyword-decoder.h
+index a352abc..177d317 100644
+--- a/sherpa-onnx/csrc/transducer-keyword-decoder.h
++++ b/sherpa-onnx/csrc/transducer-keyword-decoder.h
+@@ -14,6 +14,16 @@
+ 
+ namespace sherpa_onnx {
+ 
++struct TransducerPartialKeywordResult {
++  std::string keyword;
++  std::vector<int64_t> tokens;
++  std::vector<int32_t> frame_indexes;
++  int32_t matched_token_count = 0;
++  int32_t keyword_token_count = 0;
++  uint64_t revision = 0;
++  bool is_active = false;
++};
++
+ struct TransducerKeywordResult {
+   /// Number of frames after subsampling we have decoded so far
+   int32_t frame_offset = 0;
+@@ -30,6 +40,8 @@ struct TransducerKeywordResult {
+   /// timestamps[i] contains the output frame index where tokens[i] is decoded.
+   std::vector<int32_t> timestamps;
+ 
++  TransducerPartialKeywordResult partial;
++
+   // used only in modified beam_search
+   Hypotheses hyps;
+ };
+diff --git a/wasm/kws/CMakeLists.txt b/wasm/kws/CMakeLists.txt
+index 16c2654..bb31b08 100644
+--- a/wasm/kws/CMakeLists.txt
++++ b/wasm/kws/CMakeLists.txt
+@@ -2,19 +2,20 @@ if(NOT $ENV{SHERPA_ONNX_IS_USING_BUILD_WASM_SH})
+     message(FATAL_ERROR "Please use ./build-wasm-simd-kws.sh to build for wasm KWS")
+ endif()
+ 
+-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/decoder-epoch-12-avg-2-chunk-16-left-64.onnx")
+-    message(WARNING "${CMAKE_CURRENT_SOURCE_DIR}/assets/decoder-epoch-12-avg-2-chunk-16-left-64.onnx does not exist")
+-    message(FATAL_ERROR "Please read ${CMAKE_CURRENT_SOURCE_DIR}/assets/README.md before you continue")
+-endif()
+-
+ set(exported_functions
+   SherpaOnnxCreateKeywordSpotter
+   SherpaOnnxCreateKeywordStream
++  SherpaOnnxCreateKeywordStreamWithKeywords
+   SherpaOnnxDecodeKeywordStream
++  SherpaOnnxDestroyPartialKeywordResult
+   SherpaOnnxDestroyKeywordResult
+   SherpaOnnxDestroyKeywordSpotter
+   SherpaOnnxDestroyOnlineStream
++  SherpaOnnxFreeKeywordResultJson
+   SherpaOnnxGetKeywordResult
++  SherpaOnnxGetKeywordResultAsJson
++  SherpaOnnxGetPartialKeywordResult
++  SherpaOnnxGetPartialKeywordResultAsJson
+   SherpaOnnxIsKeywordStreamReady
+   SherpaOnnxOnlineStreamAcceptWaveform
+   SherpaOnnxOnlineStreamGetOption
+@@ -33,9 +34,9 @@ include_directories(${CMAKE_SOURCE_DIR})
+ set(MY_FLAGS "-s FORCE_FILESYSTEM=1 -s INITIAL_MEMORY=512MB -s ALLOW_MEMORY_GROWTH=1")
+ string(APPEND MY_FLAGS " -sSTACK_SIZE=10485760 ")
+ string(APPEND MY_FLAGS " -pthread -sPTHREAD_POOL_SIZE=4 ")
++string(APPEND MY_FLAGS " -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createSherpaOnnxKwsModule -sENVIRONMENT=worker ")
+ string(APPEND MY_FLAGS " -sEXPORTED_FUNCTIONS=[_CopyHeap,_malloc,_free,${all_exported_functions}] ")
+-string(APPEND MY_FLAGS "--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets@. ")
+-string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64'] ")
++string(APPEND MY_FLAGS " -sEXPORTED_RUNTIME_METHODS=['FS','ccall','stringToUTF8','setValue','getValue','lengthBytesUTF8','UTF8ToString','HEAPU8','HEAP16','HEAP32','HEAPU32','HEAPF32','HEAPF64'] ")
+ 
+ message(STATUS "MY_FLAGS: ${MY_FLAGS}")
+ 
+@@ -45,6 +46,7 @@ set(CMAKE_EXECUTABLE_LINKER_FLAGS "${CMAKE_EXECUTABLE_LINKER_FLAGS} ${MY_FLAGS}"
+ 
+ add_executable(sherpa-onnx-wasm-kws-main sherpa-onnx-wasm-main-kws.cc)
+ target_link_libraries(sherpa-onnx-wasm-kws-main sherpa-onnx-c-api)
++set_target_properties(sherpa-onnx-wasm-kws-main PROPERTIES OUTPUT_NAME sherpa-onnx-kws-module)
+ install(TARGETS sherpa-onnx-wasm-kws-main DESTINATION bin/wasm)
+ 
+ install(
+@@ -52,9 +54,8 @@ install(
+         "sherpa-onnx-kws.js"
+         "app.js"
+         "index.html"
+-        "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.js"
+-        "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.wasm"
+-        "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-wasm-kws-main.data"
++        "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-kws-module.js"
++        "$<TARGET_FILE_DIR:sherpa-onnx-wasm-kws-main>/sherpa-onnx-kws-module.wasm"
+         DESTINATION
+         bin/wasm
+ )
+diff --git a/wasm/kws/sherpa-onnx-kws.js b/wasm/kws/sherpa-onnx-kws.js
+index 7e86fa4..4a04873 100644
+--- a/wasm/kws/sherpa-onnx-kws.js
++++ b/wasm/kws/sherpa-onnx-kws.js
+@@ -299,6 +299,19 @@ class Kws {
+     return new Stream(handle, this.Module);
+   }
+ 
++  createStreamWithKeywords(keywords) {
++    const length = this.Module.lengthBytesUTF8(keywords) + 1;
++    const pointer = this.Module._malloc(length);
++    this.Module.stringToUTF8(keywords, pointer, length);
++    const handle = this.Module._SherpaOnnxCreateKeywordStreamWithKeywords(
++        this.handle, pointer);
++    this.Module._free(pointer);
++    if (!handle) {
++      throw new Error('Failed to create keyword stream: check keyword tokens');
++    }
++    return new Stream(handle, this.Module);
++  }
++
+   isReady(stream) {
+     return this.Module._SherpaOnnxIsKeywordStreamReady(
+                this.handle, stream.handle) == 1;
+@@ -319,6 +332,18 @@ class Kws {
+     this.Module._SherpaOnnxDestroyKeywordResult(r);
+     return JSON.parse(json);
+   }
++
++  getPartialResult(stream) {
++    const pointer = this.Module._SherpaOnnxGetPartialKeywordResultAsJson(
++        this.handle, stream.handle);
++    if (!pointer) {
++      return null;
++    }
++
++    const json = this.Module.UTF8ToString(pointer);
++    this.Module._SherpaOnnxFreeKeywordResultJson(pointer);
++    return JSON.parse(json);
++  }
+ }
+ 
+ function createKws(Module, myConfig) {
+@@ -366,3 +391,5 @@ if (typeof process == 'object' && typeof process.versions == 'object' &&
+     createKws,
+   };
+ }
++
++export {createKws};
