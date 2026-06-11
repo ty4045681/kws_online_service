@@ -4,21 +4,34 @@ import { join } from "node:path";
 
 import { executable, run } from "./process.mjs";
 
+export function patchComparisonOperations(patchFile) {
+  return [
+    ["read-tree", "HEAD"],
+    ["add", "--update"],
+    ["apply", "--cached", "--reverse", patchFile],
+    ["diff", "--cached", "--quiet", "HEAD"],
+  ];
+}
+
 export async function checkoutMatchesPatch(checkout, patchFile) {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "sherpa-patch-index-"));
   const environment = {
     GIT_INDEX_FILE: join(temporaryDirectory, "index"),
   };
   const git = (args) => run(executable("git"), args, {
+    capture: true,
     cwd: checkout,
     env: environment,
   });
 
   try {
-    await git(["read-tree", "HEAD"]);
-    await git(["apply", "--cached", patchFile]);
+    const [readHead, stageCheckout, reversePatch, compareHead] =
+      patchComparisonOperations(patchFile);
+    await git(readHead);
+    await git(stageCheckout);
     try {
-      await git(["diff", "--quiet"]);
+      await git(reversePatch);
+      await git(compareHead);
       return true;
     } catch {
       return false;

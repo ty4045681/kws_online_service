@@ -6,13 +6,25 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 
-import { checkoutMatchesPatch } from "./sherpa-patch.mjs";
+import {
+  checkoutMatchesPatch,
+  patchComparisonOperations,
+} from "./sherpa-patch.mjs";
 
 const execFileAsync = promisify(execFile);
 
 async function git(cwd, args) {
   return execFileAsync("git", args, { cwd, encoding: "utf8" });
 }
+
+test("patch comparison reverses the patch from the current checkout", () => {
+  assert.deepEqual(patchComparisonOperations("tracked.patch"), [
+    ["read-tree", "HEAD"],
+    ["add", "--update"],
+    ["apply", "--cached", "--reverse", "tracked.patch"],
+    ["diff", "--cached", "--quiet", "HEAD"],
+  ]);
+});
 
 test("patch matching ignores diff presentation config but rejects extra changes", async () => {
   const checkout = await mkdtemp(join(tmpdir(), "sherpa-patch-test-"));
