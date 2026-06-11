@@ -8,6 +8,7 @@ import {
   ModelAssetManager,
   createBrowserModelAssetDependencies,
   type LoadedModelPackage,
+  type ModelAssetManagerApi,
   type ModelLoadProgress,
 } from "../model/modelAssetManager";
 import { modelAssetNames, type ModelAssetName } from "../model/manifest";
@@ -18,9 +19,11 @@ import type {
   WorkerMessage,
 } from "./protocol";
 import { initialState, reduce, type AppState } from "./state";
+import { parseKeywordsText } from "./keywords";
 import {
   cloneSettings,
   defaultSettings,
+  replaceSettingsKeywords,
   settingsToKeywordsText,
   validateSettings,
   type AppSettings,
@@ -68,6 +71,11 @@ export interface KwsSessionSnapshot {
 
 type Listener = () => void;
 
+export interface KwsSessionControllerDependencies {
+  modelManager: ModelAssetManagerApi;
+  createKwsWorker: () => Worker;
+}
+
 interface AnalysisWorkerMessage {
   type: "analysis-frame" | "audio-frame" | "audio-diagnostics";
   frame?: AnalysisFrame;
@@ -105,9 +113,8 @@ function errorText(error: unknown): string {
 
 export class KwsSessionController {
   private readonly listeners = new Set<Listener>();
-  private readonly modelManager = new ModelAssetManager(
-    createBrowserModelAssetDependencies(),
-  );
+  private readonly modelManager: ModelAssetManagerApi;
+  private readonly createKwsWorker: () => Worker;
   private readonly waveHistory = new WaveHistory();
   private snapshot: KwsSessionSnapshot;
   private modelPackage: LoadedModelPackage | null = null;
@@ -123,7 +130,14 @@ export class KwsSessionController {
   private detectionRevision = 10_000;
   private disposed = false;
 
-  constructor() {
+  constructor(dependencies: Partial<KwsSessionControllerDependencies> = {}) {
+    this.modelManager = dependencies.modelManager ?? new ModelAssetManager(
+      createBrowserModelAssetDependencies(),
+    );
+    this.createKwsWorker = dependencies.createKwsWorker ?? (() =>
+      new Worker(new URL("../workers/kws.worker.ts", import.meta.url), {
+        type: "module",
+      }));
     this.snapshot = {
       app: initialState,
       modelFiles: emptyModelProgress(),
@@ -332,6 +346,9 @@ export class KwsSessionController {
         return;
       }
 
+      const keywords = parseKeywordsText(
+        new TextDecoder().decode(loaded.assets.keywords),
+      );
       this.modelPackage = loaded;
       this.waveHistory.setSampleRate(loaded.manifest.sampleRate);
       this.snapshot = {
@@ -340,6 +357,7 @@ export class KwsSessionController {
         modelVersion: loaded.manifest.version,
         modelSource: loaded.source,
         modelSampleRate: loaded.manifest.sampleRate,
+        settings: replaceSettingsKeywords(this.snapshot.settings, keywords),
         audioDiagnostics: {
           ...this.snapshot.audioDiagnostics,
           outputSampleRate: loaded.manifest.sampleRate,
@@ -356,9 +374,7 @@ export class KwsSessionController {
   }
 
   private initializeKwsWorker(modelPackage: LoadedModelPackage): void {
-    const worker = new Worker(new URL("../workers/kws.worker.ts", import.meta.url), {
-      type: "module",
-    });
+    const worker = this.createKwsWorker();
     this.kwsWorker = worker;
     worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
       this.handleKwsMessage(event.data);
