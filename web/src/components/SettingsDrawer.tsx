@@ -104,8 +104,8 @@ export function SettingsDrawer({
           {tab === "keywords" && (
             <div className="settings-section">
               <div className="section-copy">
-                <h3>预置唤醒词</h3>
-                <p>启用需要检测的关键词，并为每个词调整阈值和路径增强。</p>
+                <h3>模型唤醒词</h3>
+                <p>关键词来自当前模型包。可启用需要检测的词，并调整阈值和路径增强。</p>
               </div>
               <div className="keyword-list">
                 {draft.keywords.map((keyword) => (

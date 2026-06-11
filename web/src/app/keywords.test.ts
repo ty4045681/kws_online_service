@@ -35,9 +35,11 @@ describe("parseKeywordsText", () => {
     ["A #0.2 #0.3", "duplicate threshold"],
     ["A @one @two", "duplicate alias"],
     ["A :", "boost must be a finite number"],
+    ["A :+", "boost must be a finite number"],
     ["A :Infinity", "boost must be a finite number"],
     ["A :10.1", "boost must be between 0 and 10"],
     ["A #NaN", "threshold must be a finite number"],
+    ["A #-", "threshold must be a finite number"],
     ["A #-0.1", "threshold must be between 0 and 1"],
     ["A @", "alias must not be empty"],
   ])("rejects %s", (line, reason) => {
@@ -52,6 +54,12 @@ describe("parseKeywordsText", () => {
 
     expect(first.map(({ id }) => id)).toEqual(second.map(({ id }) => id));
     expect(first[0].id).not.toBe(first[1].id);
+  });
+
+  test("normalizes whitespace when generating stable IDs", () => {
+    expect(parseKeywordsText("A   B")[0].id).toBe(
+      parseKeywordsText("A B")[0].id,
+    );
   });
 });
 

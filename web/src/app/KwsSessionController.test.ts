@@ -3,7 +3,6 @@ import { describe, expect, test, vi } from "vitest";
 import type {
   LoadedModelPackage,
   ModelAssetManagerApi,
-  ModelLoadProgress,
 } from "../model/modelAssetManager";
 import type { ModelAssetName, ModelManifest } from "../model/manifest";
 import { KwsSessionController } from "./KwsSessionController";
@@ -20,9 +19,7 @@ class FakeModelManager implements ModelAssetManagerApi {
 
   setManifestLoader(): void {}
 
-  async load(
-    _onProgress?: (event: ModelLoadProgress) => void,
-  ): Promise<LoadedModelPackage> {
+  async load(): Promise<LoadedModelPackage> {
     return this.loaded;
   }
 }

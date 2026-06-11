@@ -55,8 +55,9 @@ export function parseKeywordsText(text: string): KeywordPreset[] {
     let boost: number | undefined;
     let threshold: number | undefined;
     let alias: string | undefined;
+    const fields = line.split(/\s+/);
 
-    for (const field of line.split(/\s+/)) {
+    for (const field of fields) {
       const marker = field[0];
       if (marker === ":") {
         if (boost !== undefined) {
@@ -87,7 +88,7 @@ export function parseKeywordsText(text: string): KeywordPreset[] {
 
     const phrase = tokens.join(" ");
     keywords.push({
-      id: `keyword-${lineNumber}-${stableHash(line)}`,
+      id: `keyword-${lineNumber}-${stableHash(fields.join(" "))}`,
       label: alias ?? phrase,
       phrase,
       ...(alias === undefined ? {} : { alias }),
