@@ -12,14 +12,18 @@ export function run(command, args, options = {}) {
       cwd: options.cwd,
       env: { ...process.env, ...options.env },
       shell: false,
-      stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
-      windowsVerbatimArguments: options.windowsVerbatimArguments ?? false,
+      stdio: [
+        options.input === undefined ? (options.capture ? "ignore" : "inherit") : "pipe",
+        options.capture ? "pipe" : "inherit",
+        options.capture ? "pipe" : "inherit",
+      ],
       windowsHide: true,
     });
     let stdout = "";
     let stderr = "";
     child.stdout?.on("data", (chunk) => { stdout += chunk; });
     child.stderr?.on("data", (chunk) => { stderr += chunk; });
+    if (options.input !== undefined) child.stdin.end(options.input);
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) resolve({ stdout, stderr });
@@ -37,8 +41,8 @@ export function windowsBatchInvocation(
   const commandLine = ["call", quote(file), ...args.map(quote)].join(" ");
   return {
     command: comspec,
-    args: ["/d", "/s", "/c", commandLine],
-    windowsVerbatimArguments: true,
+    args: ["/d", "/q"],
+    input: `${commandLine}\r\nexit /b %errorlevel%\r\n`,
   };
 }
 
@@ -47,6 +51,6 @@ export function runWindowsBatch(file, args, options = {}) {
   const invocation = windowsBatchInvocation(file, args);
   return run(invocation.command, invocation.args, {
     ...options,
-    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+    input: invocation.input,
   });
 }
