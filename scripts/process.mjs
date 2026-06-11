@@ -13,6 +13,7 @@ export function run(command, args, options = {}) {
       env: { ...process.env, ...options.env },
       shell: false,
       stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
+      windowsVerbatimArguments: options.windowsVerbatimArguments ?? false,
       windowsHide: true,
     });
     let stdout = "";
@@ -27,9 +28,25 @@ export function run(command, args, options = {}) {
   });
 }
 
-export function runWindowsBatch(file, args, options = {}) {
-  if (process.platform !== "win32") return run(file, args, options);
+export function windowsBatchInvocation(
+  file,
+  args,
+  comspec = process.env.ComSpec ?? "cmd.exe",
+) {
   const quote = (value) => `"${String(value).replaceAll('"', '""')}"`;
   const commandLine = ["call", quote(file), ...args.map(quote)].join(" ");
-  return run(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", commandLine], options);
+  return {
+    command: comspec,
+    args: ["/d", "/s", "/c", commandLine],
+    windowsVerbatimArguments: true,
+  };
+}
+
+export function runWindowsBatch(file, args, options = {}) {
+  if (process.platform !== "win32") return run(file, args, options);
+  const invocation = windowsBatchInvocation(file, args);
+  return run(invocation.command, invocation.args, {
+    ...options,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+  });
 }

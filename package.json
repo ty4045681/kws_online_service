@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "npm --prefix web run dev",
     "dev:mock": "npm --prefix web run dev:mock",
-    "test": "npm --prefix web test",
+    "test": "npm run test:scripts && npm --prefix web test",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "build": "npm --prefix web run build",
     "test:e2e": "npm --prefix web run test:e2e",
     "model:package": "npm --prefix web run model:package --",
