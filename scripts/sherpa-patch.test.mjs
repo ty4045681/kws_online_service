@@ -54,3 +54,29 @@ test("patch matching ignores diff presentation config but rejects extra changes"
     await rm(checkout, { recursive: true, force: true });
   }
 });
+
+test("patch matching accepts a CRLF patch applied to an autocrlf checkout", async () => {
+  const checkout = await mkdtemp(join(tmpdir(), "sherpa-patch-crlf-test-"));
+  const patchFile = join(checkout, "tracked.patch");
+  const sourceFile = join(checkout, "source.txt");
+
+  try {
+    await git(checkout, ["init"]);
+    await git(checkout, ["config", "user.email", "test@example.com"]);
+    await git(checkout, ["config", "user.name", "Test User"]);
+    await git(checkout, ["config", "core.autocrlf", "true"]);
+    await writeFile(sourceFile, "before\n");
+    await git(checkout, ["add", "source.txt"]);
+    await git(checkout, ["commit", "-m", "initial"]);
+
+    await writeFile(sourceFile, "after\n");
+    const { stdout: trackedPatch } = await git(checkout, ["diff", "--binary"]);
+    await git(checkout, ["checkout", "--", "source.txt"]);
+    await writeFile(patchFile, trackedPatch.replaceAll("\n", "\r\n"));
+    await git(checkout, ["apply", patchFile]);
+
+    assert.equal(await checkoutMatchesPatch(checkout, patchFile), true);
+  } finally {
+    await rm(checkout, { recursive: true, force: true });
+  }
+});

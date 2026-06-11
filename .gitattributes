@@ -3,6 +3,7 @@
 *.ts text eol=lf
 *.tsx text eol=lf
 *.json text eol=lf
+*.patch text eol=lf
 *.txt text
 *.onnx binary
 *.wasm binary

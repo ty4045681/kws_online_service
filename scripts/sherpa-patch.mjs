@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -15,6 +15,7 @@ export function patchComparisonOperations(patchFile) {
 
 export async function checkoutMatchesPatch(checkout, patchFile) {
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "sherpa-patch-index-"));
+  const normalizedPatchFile = join(temporaryDirectory, "tracked.patch");
   const environment = {
     GIT_INDEX_FILE: join(temporaryDirectory, "index"),
   };
@@ -25,8 +26,10 @@ export async function checkoutMatchesPatch(checkout, patchFile) {
   });
 
   try {
+    const patch = await readFile(patchFile, "utf8");
+    await writeFile(normalizedPatchFile, patch.replaceAll("\r\n", "\n"));
     const [readHead, stageCheckout, reversePatch, compareHead] =
-      patchComparisonOperations(patchFile);
+      patchComparisonOperations(normalizedPatchFile);
     await git(readHead);
     await git(stageCheckout);
     try {
