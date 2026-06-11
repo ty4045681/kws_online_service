@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { publicEsmPlugin } from "./vitePublicEsm";
 
 const headers = {
   "Cross-Origin-Opener-Policy": "same-origin",
@@ -7,7 +8,7 @@ const headers = {
 };
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [publicEsmPlugin(), react()],
   server: { headers },
   preview: { headers },
   worker: { format: "es" },
