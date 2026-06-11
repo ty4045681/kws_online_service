@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { executable, run } from "./process.mjs";
+import { checkoutMatchesPatch } from "./sherpa-patch.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkout = resolve(root, "third_party/sherpa-onnx");
@@ -21,10 +22,6 @@ async function exists(path) {
     if (error?.code === "ENOENT") return false;
     throw error;
   }
-}
-
-function normalize(text) {
-  return text.replaceAll("\r\n", "\n").trimEnd();
 }
 
 async function git(args, options = {}) {
@@ -56,9 +53,8 @@ async function main() {
   }
 
   const currentDiff = (await git(["diff", "--binary"], { capture: true })).stdout;
-  const trackedPatch = await readFile(patchFile, "utf8");
   if (currentDiff.trim()) {
-    if (normalize(currentDiff) !== normalize(trackedPatch)) {
+    if (!(await checkoutMatchesPatch(checkout, patchFile))) {
       throw new Error(
         "Generated sherpa-onnx checkout has changes that do not match the tracked patch",
       );
