@@ -1,11 +1,9 @@
-export interface KeywordPreset {
-  id: string;
-  label: string;
-  phrase: string;
-  enabled: boolean;
-  threshold: number;
-  boost: number;
-}
+import {
+  serializeEnabledKeywords,
+  type KeywordPreset,
+} from "./keywords";
+
+export type { KeywordPreset } from "./keywords";
 
 export interface AppSettings {
   keywords: KeywordPreset[];
@@ -14,32 +12,7 @@ export interface AppSettings {
 }
 
 export const defaultSettings: AppSettings = {
-  keywords: [
-    {
-      id: "hey-eva",
-      label: "Hey EVA",
-      phrase: "hey eva",
-      enabled: true,
-      threshold: 0.25,
-      boost: 2.5,
-    },
-    {
-      id: "hello-eva",
-      label: "Hello EVA",
-      phrase: "hello eva",
-      enabled: true,
-      threshold: 0.3,
-      boost: 2,
-    },
-    {
-      id: "eva-assistant",
-      label: "EVA Assistant",
-      phrase: "eva assistant",
-      enabled: false,
-      threshold: 0.35,
-      boost: 1.5,
-    },
-  ],
+  keywords: [],
   maxActivePaths: 4,
   promptSound: true,
 };
@@ -48,6 +21,16 @@ export function cloneSettings(settings: AppSettings): AppSettings {
   return {
     ...settings,
     keywords: settings.keywords.map((keyword) => ({ ...keyword })),
+  };
+}
+
+export function replaceSettingsKeywords(
+  settings: AppSettings,
+  keywords: readonly KeywordPreset[],
+): AppSettings {
+  return {
+    ...settings,
+    keywords: keywords.map((keyword) => ({ ...keyword })),
   };
 }
 
@@ -80,11 +63,5 @@ export function validateSettings(settings: AppSettings): string[] {
 }
 
 export function settingsToKeywordsText(settings: AppSettings): string {
-  return settings.keywords
-    .filter((keyword) => keyword.enabled)
-    .map(
-      (keyword) =>
-        `${keyword.phrase.trim()} :${keyword.boost.toFixed(2)} #${keyword.threshold.toFixed(2)}`,
-    )
-    .join("\n");
+  return serializeEnabledKeywords(settings.keywords);
 }
