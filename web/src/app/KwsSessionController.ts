@@ -126,6 +126,10 @@ export class KwsSessionController {
   private uptimeTimer: number | null = null;
   private matchFeedbackTimer: number | null = null;
   private listeningStartedAt: number | null = null;
+  // The analysis worker restarts its frame cursor for each microphone session,
+  // while the KWS worker reports ranges on the accepted-audio timeline.
+  private analysisSampleOffset = 0;
+  private forwardedAudioSampleCount = 0;
   private loadGeneration = 0;
   private detectionRevision = 10_000;
   private disposed = false;
@@ -212,6 +216,7 @@ export class KwsSessionController {
 
       this.audioStop = started.stop;
       this.waveHistory.setSampleRate(this.snapshot.modelSampleRate);
+      this.analysisSampleOffset = this.forwardedAudioSampleCount;
       this.prepareChime();
 
       const analysisWorker = new Worker(
@@ -323,6 +328,8 @@ export class KwsSessionController {
     const generation = ++this.loadGeneration;
     this.disposeKwsWorker();
     this.modelPackage = null;
+    this.analysisSampleOffset = 0;
+    this.forwardedAudioSampleCount = 0;
     this.waveHistory.clear();
     this.snapshot = {
       ...this.snapshot,
@@ -473,6 +480,7 @@ export class KwsSessionController {
     if (message.type === "audio-frame") {
       if (message.samples && this.kwsWorker) {
         const samples = message.samples;
+        const sampleCount = samples.length;
         this.kwsWorker.postMessage(
           {
             type: "audio-frame",
@@ -481,6 +489,7 @@ export class KwsSessionController {
           } satisfies KwsWorkerInboundMessage,
           [samples.buffer],
         );
+        this.forwardedAudioSampleCount += sampleCount;
       }
       return;
     }
@@ -497,8 +506,10 @@ export class KwsSessionController {
       const sampleScale = this.snapshot.modelSampleRate / inputRate;
       const frame: AnalysisFrame = {
         ...rawFrame,
-        startSample: Math.round(rawFrame.startSample * sampleScale),
-        endSample: Math.round(rawFrame.endSample * sampleScale),
+        startSample:
+          this.analysisSampleOffset + Math.round(rawFrame.startSample * sampleScale),
+        endSample:
+          this.analysisSampleOffset + Math.round(rawFrame.endSample * sampleScale),
       };
       this.waveHistory.addAnalysisFrame(frame);
       this.update({ waveHistory: this.waveHistory.getSnapshot() });
