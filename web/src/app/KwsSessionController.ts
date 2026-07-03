@@ -129,7 +129,7 @@ export class KwsSessionController {
   // The analysis worker restarts its frame cursor for each microphone session,
   // while the KWS worker reports ranges on the accepted-audio timeline.
   private analysisSampleOffset = 0;
-  private forwardedAudioSampleCount = 0;
+  private forwardedAudioSeconds = 0;
   private loadGeneration = 0;
   private detectionRevision = 10_000;
   private disposed = false;
@@ -216,7 +216,9 @@ export class KwsSessionController {
 
       this.audioStop = started.stop;
       this.waveHistory.setSampleRate(this.snapshot.modelSampleRate);
-      this.analysisSampleOffset = this.forwardedAudioSampleCount;
+      this.analysisSampleOffset = Math.round(
+        this.forwardedAudioSeconds * this.snapshot.modelSampleRate,
+      );
       this.prepareChime();
 
       const analysisWorker = new Worker(
@@ -288,6 +290,7 @@ export class KwsSessionController {
     this.kwsWorker?.postMessage({
       type: "rebuild-keywords",
       keywordsText: settingsToKeywordsText(nextSettings),
+      maxActivePaths: nextSettings.maxActivePaths,
     } satisfies KwsWorkerInboundMessage);
     this.snapshot = {
       ...this.snapshot,
@@ -329,7 +332,7 @@ export class KwsSessionController {
     this.disposeKwsWorker();
     this.modelPackage = null;
     this.analysisSampleOffset = 0;
-    this.forwardedAudioSampleCount = 0;
+    this.forwardedAudioSeconds = 0;
     this.waveHistory.clear();
     this.snapshot = {
       ...this.snapshot,
@@ -394,6 +397,7 @@ export class KwsSessionController {
       manifest: modelPackage.manifest,
       assets: modelPackage.assets,
       engine: engineSelection,
+      maxActivePaths: this.snapshot.settings.maxActivePaths,
     } satisfies KwsWorkerInboundMessage);
   }
 
@@ -481,15 +485,17 @@ export class KwsSessionController {
       if (message.samples && this.kwsWorker) {
         const samples = message.samples;
         const sampleCount = samples.length;
+        const frameSampleRate =
+          message.sampleRate ?? this.snapshot.modelSampleRate;
         this.kwsWorker.postMessage(
           {
             type: "audio-frame",
             samples,
-            sampleRate: message.sampleRate ?? this.snapshot.modelSampleRate,
+            sampleRate: frameSampleRate,
           } satisfies KwsWorkerInboundMessage,
           [samples.buffer],
         );
-        this.forwardedAudioSampleCount += sampleCount;
+        this.forwardedAudioSeconds += sampleCount / frameSampleRate;
       }
       return;
     }

@@ -128,7 +128,7 @@ export function SettingsDrawer({
                       <RangeField
                         label="Threshold"
                         value={keyword.threshold}
-                        minimum={0}
+                        minimum={0.01}
                         maximum={1}
                         step={0.01}
                         onChange={(threshold) => updateKeyword(keyword.id, { threshold })}
@@ -136,7 +136,7 @@ export function SettingsDrawer({
                       <RangeField
                         label="Boost"
                         value={keyword.boost}
-                        minimum={0}
+                        minimum={0.1}
                         maximum={10}
                         step={0.1}
                         onChange={(boost) => updateKeyword(keyword.id, { boost })}

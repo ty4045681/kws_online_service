@@ -93,8 +93,11 @@ export function parseKeywordsText(text: string): KeywordPreset[] {
       phrase,
       ...(alias === undefined ? {} : { alias }),
       enabled: true,
-      boost: boost ?? defaultBoost,
-      threshold: threshold ?? defaultThreshold,
+      boost: boost === undefined || boost === 0 ? defaultBoost : boost,
+      threshold:
+        threshold === undefined || threshold === 0
+          ? defaultThreshold
+          : threshold,
     });
   }
 

@@ -105,12 +105,11 @@ export class MockKwsEngine implements KwsEngine {
   }
 
   acceptWaveform(samples: Float32Array, sampleRate: number): void {
-    void sampleRate;
     if (this.destroyed || !this.emit) {
       return;
     }
 
-    this.cumulativeSamples += samples.length;
+    this.cumulativeSamples += samples.length * (16000 / sampleRate);
     while (
       this.scriptCursor < this.script.length &&
       this.script[this.scriptCursor].atSample <= this.cumulativeSamples
@@ -120,7 +119,11 @@ export class MockKwsEngine implements KwsEngine {
     }
   }
 
-  async rebuildKeywordStream(keywordsText: string): Promise<void> {
+  async rebuildKeywordStream(
+    keywordsText: string,
+    maxActivePaths: number,
+  ): Promise<void> {
+    void maxActivePaths;
     if (this.destroyed) {
       return;
     }

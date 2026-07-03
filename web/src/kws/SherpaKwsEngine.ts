@@ -154,7 +154,11 @@ function writeModelAssets(
   }
 }
 
-function createConfig(manifest: ModelManifest, keywords: string): Record<string, unknown> {
+function createConfig(
+  manifest: ModelManifest,
+  keywords: string,
+  maxActivePaths: number,
+): Record<string, unknown> {
   return {
     featConfig: {
       samplingRate: manifest.sampleRate,
@@ -174,7 +178,7 @@ function createConfig(manifest: ModelManifest, keywords: string): Record<string,
       modelingUnit: "",
       bpeVocab: "",
     },
-    maxActivePaths: 4,
+    maxActivePaths,
     numTrailingBlanks: 1,
     keywordsScore: 1,
     keywordsThreshold: 0.25,
@@ -189,12 +193,13 @@ export class SherpaKwsEngine implements KwsEngine {
   private manifest: ModelManifest | null = null;
   private kws: SherpaKeywordSpotter | null = null;
   private stream: SherpaStream | null = null;
-  private totalAcceptedSamples = 0;
-  private streamStartSample = 0;
+  private maxActivePaths = 4;
+  private totalAcceptedSeconds = 0;
+  private streamStartSeconds = 0;
   private lastPartialRevision = -1;
   private activePartial: PartialWorkerMessage | null = null;
   private inferenceMs = 0;
-  private samplesSinceDiagnostics = 0;
+  private secondsSinceDiagnostics = 0;
   private diagnosticsStartedAt = 0;
 
   async initialize(input: Parameters<KwsEngine["initialize"]>[0]): Promise<void> {
@@ -205,6 +210,7 @@ export class SherpaKwsEngine implements KwsEngine {
     }
 
     this.emit = input.emit;
+    this.maxActivePaths = input.maxActivePaths;
     this.emit({ type: "engine-progress", stage: "wasm-runtime", loaded: 0, total: 3 });
     const { module, createKws } = await loadSherpaRuntime();
     this.module = module;
@@ -229,25 +235,23 @@ export class SherpaKwsEngine implements KwsEngine {
     if (!this.kws || !this.stream) {
       throw new Error("Sherpa KWS engine is not initialized");
     }
-    if (inputSampleRate !== sampleRate) {
-      throw new Error(`Expected 16000 Hz PCM, received ${inputSampleRate} Hz`);
-    }
 
     this.stream.acceptWaveform(inputSampleRate, samples);
-    this.totalAcceptedSamples += samples.length;
-    this.samplesSinceDiagnostics += samples.length;
+    const seconds = samples.length / inputSampleRate;
+    this.totalAcceptedSeconds += seconds;
+    this.secondsSinceDiagnostics += seconds;
     const startedAt = performance.now();
     while (this.kws.isReady(this.stream)) {
       this.kws.decode(this.stream);
       this.handlePartial(this.kws.getPartialResult(this.stream));
       const detected = finalResultToMessage(
         this.kws.getResult(this.stream),
-        this.streamStartSample,
+        this.streamStartSampleFor16k(),
       );
       if (detected) {
         this.emit?.(detected);
         this.kws.reset(this.stream);
-        this.streamStartSample = this.totalAcceptedSamples;
+        this.streamStartSeconds = this.totalAcceptedSeconds;
         this.clearPartialTracking();
       }
     }
@@ -255,7 +259,10 @@ export class SherpaKwsEngine implements KwsEngine {
     this.maybeEmitDiagnostics();
   }
 
-  async rebuildKeywordStream(keywordsText: string): Promise<void> {
+  async rebuildKeywordStream(
+    keywordsText: string,
+    maxActivePaths: number,
+  ): Promise<void> {
     if (!this.module || !this.createKws || !this.manifest) {
       throw new Error("Sherpa KWS engine is not initialized");
     }
@@ -264,8 +271,9 @@ export class SherpaKwsEngine implements KwsEngine {
       throw new Error("At least one keyword is required");
     }
 
+    this.maxActivePaths = maxActivePaths;
     this.replaceKeywordSpotter(keywords);
-    this.streamStartSample = this.totalAcceptedSamples;
+    this.streamStartSeconds = this.totalAcceptedSeconds;
     this.clearPartialTracking();
     this.emit?.({ type: "partial-reset" });
   }
@@ -275,7 +283,7 @@ export class SherpaKwsEngine implements KwsEngine {
       return;
     }
     this.kws.reset(this.stream);
-    this.streamStartSample = this.totalAcceptedSamples;
+    this.streamStartSeconds = this.totalAcceptedSeconds;
     this.clearPartialTracking();
     this.emit?.({ type: "partial-reset" });
   }
@@ -292,12 +300,16 @@ export class SherpaKwsEngine implements KwsEngine {
     this.clearPartialTracking();
   }
 
+  private streamStartSampleFor16k(): number {
+    return Math.round(this.streamStartSeconds * sampleRate);
+  }
+
   private handlePartial(result: SherpaPartialResult | null): void {
     if (!result || result.revision === this.lastPartialRevision) {
       return;
     }
     this.lastPartialRevision = result.revision;
-    const partial = partialResultToMessage(result, this.streamStartSample);
+    const partial = partialResultToMessage(result, this.streamStartSampleFor16k());
     if (partial) {
       this.activePartial = partial;
       this.emit?.(partial);
@@ -326,7 +338,7 @@ export class SherpaKwsEngine implements KwsEngine {
     previousKws?.free();
     this.kws = this.createKws(
       this.module,
-      createConfig(this.manifest, keywords),
+      createConfig(this.manifest, keywords, this.maxActivePaths),
     );
     this.stream = this.kws.createStream();
   }
@@ -342,7 +354,7 @@ export class SherpaKwsEngine implements KwsEngine {
     if (elapsedMs < 1_000) {
       return;
     }
-    const audioMs = (this.samplesSinceDiagnostics / sampleRate) * 1_000;
+    const audioMs = this.secondsSinceDiagnostics * 1_000;
     this.emit?.({
       type: "diagnostics",
       inferenceMs: this.inferenceMs,
@@ -351,7 +363,7 @@ export class SherpaKwsEngine implements KwsEngine {
       droppedSamples: 0,
     });
     this.inferenceMs = 0;
-    this.samplesSinceDiagnostics = 0;
+    this.secondsSinceDiagnostics = 0;
     this.diagnosticsStartedAt = now;
   }
 }

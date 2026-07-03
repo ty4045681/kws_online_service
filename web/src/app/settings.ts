@@ -43,11 +43,11 @@ export function validateSettings(settings: AppSettings): string[] {
   }
 
   for (const keyword of settings.keywords) {
-    if (!Number.isFinite(keyword.threshold) || keyword.threshold < 0 || keyword.threshold > 1) {
-      errors.push(`${keyword.label} 的阈值必须在 0 到 1 之间`);
+    if (!Number.isFinite(keyword.threshold) || keyword.threshold <= 0 || keyword.threshold > 1) {
+      errors.push(`${keyword.label} 的阈值必须大于 0 且不超过 1`);
     }
-    if (!Number.isFinite(keyword.boost) || keyword.boost < 0 || keyword.boost > 10) {
-      errors.push(`${keyword.label} 的增强值必须在 0 到 10 之间`);
+    if (!Number.isFinite(keyword.boost) || keyword.boost <= 0 || keyword.boost > 10) {
+      errors.push(`${keyword.label} 的增强值必须大于 0 且不超过 10`);
     }
   }
 

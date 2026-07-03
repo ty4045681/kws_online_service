@@ -61,7 +61,21 @@ test("validates enabled keywords and parameter ranges", () => {
 
   expect(validateSettings(settings)).toEqual([
     "请至少启用一个关键词",
-    "A B 的阈值必须在 0 到 1 之间",
-    "A B 的增强值必须在 0 到 10 之间",
+    "A B 的阈值必须大于 0 且不超过 1",
+    "A B 的增强值必须大于 0 且不超过 10",
+  ]);
+});
+
+test("rejects zero threshold and boost", () => {
+  const settings = replaceSettingsKeywords(
+    defaultSettings,
+    parseKeywordsText("A B"),
+  );
+  settings.keywords[0].threshold = 0;
+  settings.keywords[0].boost = 0;
+
+  expect(validateSettings(settings)).toEqual([
+    "A B 的阈值必须大于 0 且不超过 1",
+    "A B 的增强值必须大于 0 且不超过 10",
   ]);
 });

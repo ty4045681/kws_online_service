@@ -62,10 +62,12 @@ class FakeAudioContext {
   }
 
   createBuffer(
-    _channels: number,
+    channels: number,
     frameCount: number,
-    _sampleRate: number,
+    sampleRate: number,
   ): Pick<AudioBuffer, "getChannelData"> {
+    void channels;
+    void sampleRate;
     const data = new Float32Array(frameCount);
     return { getChannelData: () => data };
   }
@@ -88,11 +90,8 @@ class FakeAudioContext {
 }
 
 class FakeAudioWorkletNode extends FakeAudioNode {
-  constructor(
-    _context: AudioContext,
-    _name: string,
-    _options: AudioWorkletNodeOptions,
-  ) {
+  constructor(..._ignored: unknown[]) {
+    void _ignored;
     super();
   }
 }
@@ -105,7 +104,8 @@ class FakeAnalysisWorker {
   onmessage: FakeWorkerMessageHandler = null;
   onerror: FakeWorkerErrorHandler = null;
 
-  constructor(_url: URL, _options?: WorkerOptions) {
+  constructor(..._ignored: unknown[]) {
+    void _ignored;
     FakeAnalysisWorker.instances.push(this);
   }
 
@@ -181,6 +181,7 @@ describe("KwsSessionController model keywords", () => {
     expect(worker.messages[1]).toEqual({
       type: "rebuild-keywords",
       keywordsText: "A B :1.50 #0.35 @alpha\n",
+      maxActivePaths: 4,
     });
     controller.dispose();
   });

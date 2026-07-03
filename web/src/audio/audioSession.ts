@@ -66,6 +66,9 @@ export class AudioSession {
         numberOfInputs: 1,
         numberOfOutputs: 1,
         outputChannelCount: [1],
+        channelCount: 1,
+        channelCountMode: "explicit",
+        channelInterpretation: "speakers",
         processorOptions: { ring: this.ring.descriptor },
       });
       this.gain = this.context.createGain();

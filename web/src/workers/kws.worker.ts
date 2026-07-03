@@ -55,6 +55,7 @@ async function initialize(message: Extract<KwsWorkerInboundMessage, { type: "ini
     await engine.initialize({
       manifest: message.manifest,
       assets: message.assets,
+      maxActivePaths: message.maxActivePaths,
       emit,
     });
     initialized = true;
@@ -102,7 +103,10 @@ async function handleMessage(message: KwsWorkerInboundMessage): Promise<void> {
         activeEngine.acceptWaveform(message.samples, message.sampleRate);
         break;
       case "rebuild-keywords":
-        await activeEngine.rebuildKeywordStream(message.keywordsText);
+        await activeEngine.rebuildKeywordStream(
+          message.keywordsText,
+          message.maxActivePaths,
+        );
         break;
       case "reset":
         activeEngine.reset();

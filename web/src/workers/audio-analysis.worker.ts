@@ -2,19 +2,20 @@ import {
   SharedPcmRing,
   type SharedPcmRingDescriptor,
 } from "../audio/sharedPcmRing";
-import { StreamingResampler } from "../audio/streamingResampler";
 import {
   calculateRms,
   calculateSpectralCentroid,
 } from "../audio/spectralCentroid";
 
-const OUTPUT_SAMPLE_RATE = 16000;
-const AUDIO_FRAME_SAMPLES = 320;
 const ANALYSIS_FRAMES_PER_SECOND = 15;
 const POLL_INTERVAL_MS = 12;
 const DIAGNOSTICS_INTERVAL_MS = 1000;
 const HEADER_WRITE_INDEX = 0;
 const HEADER_READ_INDEX = 1;
+
+function frameSizeForRate(rate: number): number {
+  return Math.max(1, Math.round(rate / 50));
+}
 
 interface StartMessage {
   type: "start";
@@ -39,7 +40,7 @@ interface AnalysisFrameMessage {
 interface AudioFrameMessage {
   type: "audio-frame";
   samples: Float32Array;
-  sampleRate: 16000;
+  sampleRate: number;
 }
 
 interface AudioDiagnosticsMessage {
@@ -62,7 +63,7 @@ interface AnalysisState {
   ring: SharedPcmRing;
   descriptor: SharedPcmRingDescriptor;
   inputSampleRate: number;
-  resampler: StreamingResampler;
+  audioFrameSize: number;
   readBuffer: Float32Array;
   analysisBuffer: Float32Array;
   analysisLength: number;
@@ -89,7 +90,7 @@ function emitAudioSamples(active: AnalysisState, samples: Float32Array): void {
   while (sourceOffset < samples.length) {
     const copyCount = Math.min(
       samples.length - sourceOffset,
-      AUDIO_FRAME_SAMPLES - active.audioFrameLength,
+      active.audioFrameSize - active.audioFrameLength,
     );
     active.audioFrame.set(
       samples.subarray(sourceOffset, sourceOffset + copyCount),
@@ -98,17 +99,17 @@ function emitAudioSamples(active: AnalysisState, samples: Float32Array): void {
     active.audioFrameLength += copyCount;
     sourceOffset += copyCount;
 
-    if (active.audioFrameLength === AUDIO_FRAME_SAMPLES) {
+    if (active.audioFrameLength === active.audioFrameSize) {
       const completedFrame = active.audioFrame;
       workerScope.postMessage(
         {
           type: "audio-frame",
           samples: completedFrame,
-          sampleRate: OUTPUT_SAMPLE_RATE,
+          sampleRate: active.inputSampleRate,
         },
         [completedFrame.buffer],
       );
-      active.audioFrame = new Float32Array(AUDIO_FRAME_SAMPLES);
+      active.audioFrame = new Float32Array(active.audioFrameSize);
       active.audioFrameLength = 0;
     }
   }
@@ -157,7 +158,7 @@ function poll(): void {
   if (readCount > 0) {
     const input = active.readBuffer.subarray(0, readCount);
     emitAnalysis(active, input);
-    emitAudioSamples(active, active.resampler.process(input));
+    emitAudioSamples(active, input);
     active.inputSampleCursor += readCount;
   }
 
@@ -191,20 +192,18 @@ function start(message: StartMessage): void {
     1,
     Math.round(message.inputSampleRate / ANALYSIS_FRAMES_PER_SECOND),
   );
+  const audioFrameSize = frameSizeForRate(message.inputSampleRate);
   state = {
     ring: SharedPcmRing.fromDescriptor(message.ring),
     descriptor: message.ring,
     inputSampleRate: message.inputSampleRate,
-    resampler: new StreamingResampler(
-      message.inputSampleRate,
-      OUTPUT_SAMPLE_RATE,
-    ),
+    audioFrameSize,
     readBuffer: new Float32Array(Math.min(message.ring.capacity, 4096)),
     analysisBuffer: new Float32Array(analysisSampleCount),
     analysisLength: 0,
     analysisStartSample: 0,
     inputSampleCursor: 0,
-    audioFrame: new Float32Array(AUDIO_FRAME_SAMPLES),
+    audioFrame: new Float32Array(audioFrameSize),
     audioFrameLength: 0,
     lastDiagnosticsAt: performance.now(),
     timer: null,

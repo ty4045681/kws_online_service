@@ -7,6 +7,7 @@ export interface InitializeKwsWorkerMessage {
   manifest: ModelManifest;
   assets: Record<ModelAssetName, ArrayBuffer>;
   engine: KwsEngineSelection;
+  maxActivePaths: number;
 }
 
 export interface AudioFrameKwsWorkerMessage {
@@ -18,6 +19,7 @@ export interface AudioFrameKwsWorkerMessage {
 export interface RebuildKeywordsKwsWorkerMessage {
   type: "rebuild-keywords";
   keywordsText: string;
+  maxActivePaths: number;
 }
 
 export interface ResetKwsWorkerMessage {

@@ -29,6 +29,15 @@ describe("parseKeywordsText", () => {
     ]);
   });
 
+  test("normalizes explicit zero boost and threshold to the defaults", () => {
+    const keywords = parseKeywordsText("A B :0 #0\nC D :0.00 #0.0");
+
+    expect(keywords).toMatchObject([
+      { phrase: "A B", boost: 1, threshold: 0.25 },
+      { phrase: "C D", boost: 1, threshold: 0.25 },
+    ]);
+  });
+
   test.each([
     ["#0.2", "at least one token is required"],
     ["A :1 :2", "duplicate boost"],
